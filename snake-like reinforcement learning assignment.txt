@@ -1,0 +1,14 @@
+snake-like-reinforcement-learning:
+Your player controlled character is in a 1000x1000 unit board.
+The character has a squint angle of 90 degrees, meaning if facing north, it can
+see 45 degrees on either side of north. It can estimate distance of the reward.
+The character is always moving forward at a speed of S = 100units/sec
+The character turns with a turn rate of 30 deg/sec (max) and can turn slower if desired.
+
+Somewhere randomly on the board is a "goal".
+Train a model using reinforcement learning such that the character repeatedly
+arrives to the goal using a relatively optimal path.
+
+Arriving: within 5 units (radius) of the reward.
+
+visual representation as a gif
