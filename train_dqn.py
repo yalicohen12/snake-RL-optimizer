@@ -6,7 +6,7 @@ import torch
 from dqn_agent import DQNAgent
 from snake_environment import SnakesWorldEnv
 import matplotlib.pyplot as plt
-EPISODES = 1000
+EPISODES = 10000
 MAX_STEPS = 1000
 BATCH_SIZE = 32
 GAMMA = 0.95
@@ -19,7 +19,10 @@ action_mapping = np.array([-30, -15, -5, 0, 5, 15, 30])
 
 env = SnakesWorldEnv()
 agent = DQNAgent(observations_dim=env.observation_space.shape[0], actions_dim=7)
-training_rewards = agent.train(env, num_episodes=500, max_steps_per_episode=500)
+training_rewards = agent.train(env, num_episodes=600, max_steps_per_episode=800)
+torch.save(agent.policy_net.state_dict(), "dqn_snake_modelv2.pth")
+print("Model saved successfully!")
+
 
 # Plotting training rewards
 plt.figure(figsize=(10, 5))
@@ -29,7 +32,7 @@ plt.xlabel('Episode')
 plt.ylabel('Reward')
 plt.show()
 
-avg_reward, std_reward, eval_rewards, won_count = agent.evaluate_with_video(env, num_episodes=50, video_episodes=[0, 49])
+avg_reward, std_reward, eval_rewards, won_count = agent.evaluate_with_video(env, num_episodes=100, video_episodes=[0, 49,59])
 
 
 

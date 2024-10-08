@@ -9,14 +9,28 @@ from collections import deque
 class DQN(nn.Module):
     def __init__(self, observations_dim, actions_dim):
         super(DQN, self).__init__()
-        self.fc_layer1 = nn.Linear(observations_dim, 128)
-        self.fc_layer2 = nn.Linear(128, 128)
-        self.fc_layer3 = nn.Linear(128, actions_dim)
+        self.feature = nn.Sequential(
+            nn.Linear(observations_dim, 128),
+            nn.ReLU(),
+            nn.Linear(128, 128),
+            nn.ReLU()
+        )
+        self.advantage = nn.Sequential(
+            nn.Linear(128, 128),
+            nn.ReLU(),
+            nn.Linear(128, actions_dim)
+        )
+        self.value = nn.Sequential(
+            nn.Linear(128, 128),
+            nn.ReLU(),
+            nn.Linear(128, 1)
+        )
 
-    def forward(self, observations):
-        observations = F.relu_(self.fc_layer1(observations))
-        observations = F.relu_(self.fc_layer2(observations))
-        return self.fc_layer3(observations)
+    def forward(self, x):
+        x = self.feature(x)
+        advantage = self.advantage(x)
+        value = self.value(x)
+        return value + advantage - advantage.mean()
 
 class ReplayMemory(object):
     def __init__(self, capacity):

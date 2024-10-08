@@ -33,14 +33,13 @@ class SnakesWorldEnv(gym.Env):
         self.current_unseen_cells = 0
 
         self.distance_to_goal = 1
-        self.last_seen_target_direction = -1
         self.near_border_counter = 0
 
 
         self.observation_space = spaces.Box(
-            low=np.array([0, 0, -180, 0, 0, -self.max_turn_rate, 0, 0, 0, 0, 0, 0,0,0,0]),
+            low=np.array([0, 0, -180, 0, 0, -self.max_turn_rate, 0, 0]),
             high=np.array([self.board_size, self.board_size, 180, self.board_size, self.board_size, self.max_turn_rate, 0,
-                           np.linalg.norm(np.array([self.board_size, self.board_size])), 1, 1, 1, 1,1000,1,1]),
+                           np.linalg.norm(np.array([self.board_size, self.board_size]))]),
             dtype=np.float32
         )
         np.set_printoptions(suppress=True, precision=6)
@@ -50,10 +49,10 @@ class SnakesWorldEnv(gym.Env):
 
     def reset(self, *, seed=None, options=None):
         self.snake_head_position = np.random.uniform(50, self.board_size - 50, size=(2,))
-        self.snake_head_position[0] = 500
-        self.snake_head_position[1] = 900
+        # self.snake_head_position[0] = 500
+        # self.snake_head_position[1] = 800
         self.snake_head_angle = np.random.uniform(-180, 180)
-        self.snake_head_angle = 90
+        # self.snake_head_angle = 90
         self.goal_position = np.random.uniform(50, self.board_size - 50, size=(2,))
         # self.goal_position[0] = 443
         # self.goal_position[1] = 709
@@ -63,11 +62,24 @@ class SnakesWorldEnv(gym.Env):
         self.current_seen_cells = 0
         self.current_unseen_cells = 0
         self.near_border_counter = 0
-        self.last_seen_target_direction = -1
         self.steps = 0
         self.max_steps = 1000
         self.angle_to_target = -1
         return self._get_obs()
+
+    def reset_goal(self):
+        self.goal_position = np.random.uniform(50, self.board_size - 50, size=(2,))
+        self.distance_to_goal = 1
+        self.visited_cells_map = np.zeros((self.grid_size, self.grid_size))
+        self.is_target_visible = False
+        self.current_seen_cells = 0
+        self.current_unseen_cells = 0
+        self.near_border_counter = 0
+        self.steps = 0
+        self.max_steps = 1000
+        self.angle_to_target = -1
+        return self._get_obs()
+
 
     def _get_obs(self):
         return self.normalize_obs()
@@ -84,11 +96,11 @@ class SnakesWorldEnv(gym.Env):
 
         if self.is_near_border(new_x, new_y):
             self.near_border_counter += 1
-            self.snake_head_angle *= 1.2
-            reward -= self.scale_border_visit_counter()
+            self.snake_head_angle *= 1.15
+            reward -= self.scale_border_visit_counter() * 2
         else:
             if self.near_border_counter >0:
-                reward += 0.5
+                reward += 0.3
             self.near_border_counter = 0
 
         old_position = self.snake_head_position.copy()
@@ -96,7 +108,7 @@ class SnakesWorldEnv(gym.Env):
         self.snake_head_position[1] = new_y
 
         movement = np.linalg.norm(self.snake_head_position - old_position)
-        reward += movement / self.board_size
+        reward += (movement / self.board_size) * 2
 
         seen_cells, unseen_cells = self.get_cells_status_within_fov()
         self.current_seen_cells = seen_cells
@@ -113,11 +125,10 @@ class SnakesWorldEnv(gym.Env):
             self.is_target_visible = True
             self.angle_to_target = self.get_current_angle_to_target()
             if np.linalg.norm(self.snake_head_position - self.goal_position) <= self.arrived_distance:
-                reward += 10
+                reward += 100
                 done = True
             else:
                 reward += self.evaluate_reward_inside_fov()
-                self.update_last_seen_target_direction()
                 self.distance_to_goal = self.get_updated_distance_to_goal()
         else:
             if self.is_target_visible:
@@ -151,15 +162,8 @@ class SnakesWorldEnv(gym.Env):
         delta_x = self.time_step * self.movement_speed * np.cos(radians)
         delta_y = self.time_step * self.movement_speed * np.sin(radians)
 
-        new_x = self.snake_head_position[0] + delta_x
-        new_y = self.snake_head_position[1] + delta_y
-
-        # print("prev x: " , self.snake_head_position[0], " new x: " , new_x)
-        # print("prev y: " , self.snake_head_position[1], " new y: " , new_y)
-        if (new_x < 50 or new_x > self.board_size - 50 or
-                new_y < 50 or new_y > self.board_size - 50):
-            if self.is_near_border(new_x, new_y):
-                 return self.snake_head_position
+        new_x = np.clip(self.snake_head_position[0] + delta_x, 0, self.board_size)
+        new_y = np.clip(self.snake_head_position[1] + delta_y, 0, self.board_size)
 
         return new_x, new_y
 
@@ -178,7 +182,7 @@ class SnakesWorldEnv(gym.Env):
 
     def is_near_border(self, x, y):
         # print("working with: ",x,y, " ange: ", self.snake_head_angle)
-        border_distance = 150
+        border_distance = 100
         borders = [
             (x, self.board_size, 90),
             (x, 0, -90),
@@ -229,11 +233,6 @@ class SnakesWorldEnv(gym.Env):
         relative_angle = (angle_to_point - self.snake_head_angle + 180) % 360 - 180
         return relative_angle
 
-    def update_last_seen_target_direction(self):
-        dx = self.goal_position[0] - self.snake_head_position[0]
-        dy = self.goal_position[1] - self.snake_head_position[1]
-        self.last_seen_target_direction = np.degrees(np.arctan2(dy, dx)) % 360
-
     def evaluate_reward_outside_fov(self):
         reward = -0.1
         if self.angle_to_target != -1:
@@ -253,10 +252,6 @@ class SnakesWorldEnv(gym.Env):
         if curr_distance !=1:
             return (curr_distance - new_distance_to_goal) * 10
         return (curr_distance - new_distance_to_goal) / 1.2
-
-    def get_relative_angle_to_target(self, snake_heading):
-        return ((self.last_seen_target_direction - snake_heading + 180) % 360) - 180
-
 
     def get_cells_status_within_fov(self):
         count_seen_cells = 0
@@ -290,17 +285,12 @@ class SnakesWorldEnv(gym.Env):
             self.normalize(self.snake_head_position[0], 0, self.board_size),
             self.normalize(self.snake_head_position[1], 0, self.board_size),
             self.normalize_angle(self.snake_head_angle),
-            self.scale_cells_count(self.current_seen_cells),
-            self.scale_cells_count(self.current_unseen_cells),
+            # self.scale_cells_count(self.current_seen_cells),
+            # self.scale_cells_count(self.current_unseen_cells),
             self.distance_to_goal,
             self.normalize_angle(self.angle_to_target),
-            distance_r,
-            distance_l,
-            distance_u,
-            distance_d,
             scaled_border_count,
             1 if self.is_target_visible else 0,
-            self.steps / self.max_steps,
             proximity_to_border
         ])
 
@@ -398,22 +388,27 @@ class SnakesWorldEnv(gym.Env):
         ax.add_patch(wedge)
 
         # Add parameters to the side
-        seen_cells = obs[3]
-        unseen_cells = obs[4]
+        # seen_cells = obs[3]
+        # unseen_cells = obs[4]
+        snake_head_pos = [obs[0], obs[1]]
         angle_value = obs[2] * 180
-        distance_to_goal = obs[5]
-        last_seen_target_dir = obs[6]
-        border_vis = obs[11] * 100
-        is_target_visible = obs[12]
+        distance_to_goal = obs[3]
+        angle = obs[6]
+        border_vis = obs[5] * 100
+        is_target_visible = obs[6]
+        prox = obs[7]
 
         side_info = (
-            f"Seen Cells: {seen_cells:.3f}\n"
-            f"Unseen Cells: {unseen_cells:.3f}\n"
+            # f"Seen Cells: {seen_cells:.3f}\n"
+            # f"Unseen Cells: {unseen_cells:.3f}\n"
+            f"snake_head pos: {snake_head_pos} \n"
             f"Angle: {angle_value:.2f}°\n"
             f"Distance to Goal: {distance_to_goal:.3f}\n"
-            f"angle to traget: {last_seen_target_dir:.3f}\n"
-            f"border visit count: {border_vis} \n"
-            f"is target visible: {is_target_visible}"
+            f"angle to traget: {angle:.3f}\n"
+            f"is target visible: {is_target_visible} \n"
+            f" proximity to border: {prox} \n"
+            f"border visit count: {border_vis}"
+
         )
 
         # Adjust text placement to avoid cutting
